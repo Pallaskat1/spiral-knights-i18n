@@ -18,7 +18,9 @@ should be escaped by using `\u00e7` convention.
 
 Run `python3 tools/check_bundles.py` before sending a pull request. It reports keys that
 aren't in the English bundle, unescaped characters, and placeholders, HTML tags or `|`
-separators that don't match the English.
+separators that don't match the English. To check only one language, pass it with `--lang`,
+e.g. `python3 tools/check_bundles.py --lang es`, and to check only one bundle, use `--bundle`,
+e.g. `--bundle pvp`. They can be combined: `--bundle pvp --lang es`.
 
 ## License and contributions
 

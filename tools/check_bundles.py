@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Sanity-check the translation bundles against the default English bundles.
 
-Usage: python3 tools/check_bundles.py [bundle_dir]
+Usage: python3 tools/check_bundles.py [--lang LANG ...] [--bundle NAME ...] [bundle_dir]
+
+With --lang (e.g. --lang es), only problems in that language's bundles are reported.
+With --bundle (e.g. --bundle pvp), only problems in that bundle (English and translations) are reported.
+Both together report only the files matching both.
 
 Errors (exit status 1):
   - a translation key that the English bundle doesn't have, or a bundle with no English bundle
@@ -17,6 +21,7 @@ Warnings:
   - a translation identical to the English (redundant: English is the fallback)
   - Portuguese text that looks Spanish (heuristic)
 """
+import argparse
 import os
 import re
 import sys
@@ -122,9 +127,36 @@ def compare(lang, en, tr):
     return out
 
 
+def wanted(name, langs, bundles):
+    """Whether problems in this file should be reported for the requested languages and bundles."""
+    m = LANG_SUFFIX.match(name)
+    if bundles and (m.group("base") if m else name[:-len(".properties")]) not in bundles:
+        return False
+    if not langs:
+        return True
+    return bool(m) and any(m.group("lang") == l or m.group("lang").startswith(l + "_") for l in langs)
+
+
 def main():
-    root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    ap = argparse.ArgumentParser(description="Sanity-check the translation bundles against the English bundles.")
+    ap.add_argument("--lang", action="append", default=[],
+                    help="only report problems in this language's bundles (e.g. es); may be repeated")
+    ap.add_argument("--bundle", action="append", default=[],
+                    help="only report problems in this bundle and its translations (e.g. pvp); may be repeated")
+    ap.add_argument("bundle_dir", nargs="?",
+                    default=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    args = ap.parse_args()
+    root = args.bundle_dir
     names = sorted(n for n in os.listdir(root) if n.endswith(".properties"))
+    checked = [n for n in names if wanted(n, args.lang, args.bundle)]
+    if not checked:
+        what = []
+        if args.lang:
+            what.append(f"language(s) {', '.join(args.lang)}")
+        if args.bundle:
+            what.append(f"bundle(s) {', '.join(args.bundle)}")
+        print(f"no bundles found for {' and '.join(what)}")
+        sys.exit(1)
     parsed = {n: parse(os.path.join(root, n)) for n in names}
     report = []  # (file, line, level, message)
     for name, (props, problems) in parsed.items():
@@ -165,11 +197,12 @@ def main():
         for alias, keys in sorted(owners.items()):
             if len(keys) > 1:
                 report.append((name, 1, "error", f"chat alias '{alias}' is used by {', '.join(sorted(keys))}"))
+    report = [r for r in report if wanted(r[0], args.lang, args.bundle)]
     for name, line, level, msg in sorted(report):
         print(f"{name}:{line}: {level}: {msg}")
     errors = sum(1 for r in report if r[2] == "error")
     warnings = len(report) - errors
-    print(f"{errors} error(s), {warnings} warning(s) in {len(names)} files")
+    print(f"{errors} error(s), {warnings} warning(s) in {len(checked)} files")
     sys.exit(1 if errors else 0)
 
 
