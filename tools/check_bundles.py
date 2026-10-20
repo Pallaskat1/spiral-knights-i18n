@@ -34,9 +34,6 @@ TAG = re.compile(r"</?(?:html|body|font|center|div|span|img|table|tr|td|th|ul|ol
                  r"sup|sub|hr|tt|small|big|pre|code|br|b|i|u|p|a)(?:\s+[a-zA-Z-]+\s*=[^<>]*)?\s*/?>", re.I)
 NEWLINE = re.compile(r"(?<!\\)(?:\\\\)*\\n")
 ESCAPED_BACKSLASH_N = re.compile(r"(?<!\\)(?:\\\\)+n")
-SPANISH = re.compile(r"[ñ¿¡]|\b(?:y|el|los|las|del|una|usted|puedes|tienes|muy|pero|hay|aquí|también|"
-                     r"caballero|caballeros|hasta|donde|siempre|cuando|después|ningún|algún)\b|\w(?:ción|ciones)\b",
-                     re.I)
 
 
 class Prop:
@@ -124,8 +121,6 @@ def compare(lang, en, tr):
         out.append(("warning", "leading spaces differ from English"))
     if e == t:
         out.append(("warning", "identical to English (redundant; English is the fallback)"))
-    if lang.startswith("pt") and len(set(m.group(0).lower() for m in SPANISH.finditer(t))) >= 2:
-        out.append(("warning", "looks like Spanish"))
     return out
 
 
