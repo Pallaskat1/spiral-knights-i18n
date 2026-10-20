@@ -11,7 +11,8 @@ Errors (exit status 1):
   - a translation key that the English bundle doesn't have, or a bundle with no English bundle
   - a line that looks like the continuation of the value above it, but the line before it doesn't
     end with a single "\\" (missing, followed by whitespace, or written as "/")
-  - characters above 127 that are not written as \\uXXXX escapes
+  - characters above 127 that are not written as \\uXXXX escapes, and control characters
+  - a \\u escape without four hex digits after it (e.g. a cut-off "\\u00e")
   - duplicate keys in one file
   - {0}-style placeholders, HTML tags or "|" separators that differ from the English
   - an escaped backslash before "n" (shows up in game as a literal "\\n")
@@ -36,6 +37,7 @@ TAG = re.compile(r"</?(?:html|body|font|center|div|span|img|table|tr|td|th|ul|ol
                  r"sup|sub|hr|tt|small|big|pre|code|br|b|i|u|p|a)(?:\s+[a-zA-Z-]+\s*=[^<>]*)?\s*/?>", re.I)
 NEWLINE = re.compile(r"(?<!\\)(?:\\\\)*\\n")
 ESCAPED_BACKSLASH_N = re.compile(r"(?<!\\)(?:\\\\)+n")
+MALFORMED_UNICODE = re.compile(r"(?<!\\)(?:\\\\)*(\\u(?![0-9a-fA-F]{4})[0-9a-fA-F]{0,3}.?)")
 
 
 class Prop:
@@ -79,8 +81,15 @@ def parse(path):
         data = f.read()
     problems = []
     for n, line in enumerate(data.split(b"\n"), 1):
-        if any(b > 127 for b in line):
-            problems.append((n, "error", "non-ASCII character; write it as a \\uXXXX escape"))
+        text = line.rstrip(b"\r").decode("utf-8", "replace")
+        bad = sorted({c for c in text if ord(c) > 127})
+        if bad:
+            chars = ", ".join(f"'{c}' (\\u{ord(c):04x})" if c != "�" else "invalid UTF-8" for c in bad)
+            problems.append((n, "error", f"non-ASCII character {chars}; write it as a \\uXXXX escape"))
+        if any(ord(c) < 32 and c not in "\t\f" or ord(c) == 127 for c in text):
+            problems.append((n, "error", "control character; remove it or write it as an escape"))
+        for m in MALFORMED_UNICODE.finditer(text):
+            problems.append((n, "error", f"malformed unicode escape '{m.group(1)}'; it needs four hex digits"))
     lines = re.split(r"\r\n|\r|\n", data.decode("latin-1"))
     props, i = [], 0
     while i < len(lines):
