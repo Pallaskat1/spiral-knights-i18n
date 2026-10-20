@@ -9,6 +9,8 @@ Both together report only the files matching both.
 
 Errors (exit status 1):
   - a translation key that the English bundle doesn't have, or a bundle with no English bundle
+  - a line that looks like the continuation of the value above it, but the line before it doesn't
+    end with a single "\\" (missing, followed by whitespace, or written as "/")
   - characters above 127 that are not written as \\uXXXX escapes
   - duplicate keys in one file
   - {0}-style placeholders, HTML tags or "|" separators that differ from the English
@@ -39,6 +41,8 @@ ESCAPED_BACKSLASH_N = re.compile(r"(?<!\\)(?:\\\\)+n")
 class Prop:
     def __init__(self, key, raw, line, last):
         self.key, self.raw, self.line, self.last = key, raw, line, last
+        # Set by parse() when this entry starts on the line right after another entry's last line.
+        self.prev, self.prev_text, self.indented = None, "", False
 
 
 def _is_ws(c):
@@ -98,9 +102,30 @@ def parse(path):
             v += 1
             while v < len(text) and _is_ws(text[v]):
                 v += 1
-        props.append(Prop(decode(text[:k]), text[v:], start + 1, i + 1))
+        p = Prop(decode(text[:k]), text[v:], start + 1, i + 1)
+        if props and props[-1].last == start:
+            p.prev, p.prev_text, p.indented = props[-1], lines[start - 1], _is_ws(lines[start][:1])
+        props.append(p)
         i += 1
     return props, problems
+
+
+def bad_continuation(p):
+    """Why p's first line looks like it should have continued the entry above it."""
+    if re.search(r"\\[ \t]+$", p.prev_text):
+        why = "has whitespace after the \\"
+    elif p.prev_text.rstrip().endswith("/"):
+        why = "ends with / instead of \\"
+    else:
+        why = "doesn't end with \\"
+    key = p.key.replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
+    return f"'{key}' looks like a continuation of {p.prev.key}, but line {p.line - 1} {why}"
+
+
+def is_fragment(p):
+    """Whether an unknown key right after another entry is more likely a piece of that entry's value."""
+    return bool(p.prev) and (not re.fullmatch(r"[\w.\-]+", p.key) or
+                             re.search(r"(?<!\\)(?:\\\\)*\\n\s*$", p.prev_text) is not None)
 
 
 def compare(lang, en, tr):
@@ -156,10 +181,15 @@ def main():
         sys.exit(1)
     parsed = {n: parse(os.path.join(root, n)) for n in names}
     report = []  # (file, line, level, message)
+    stray = set()  # (file, line) of entries already reported as broken continuations
     for name, (props, problems) in parsed.items():
         report += [(name, line, level, msg) for line, level, msg in problems]
         seen = {}
         for p in props:
+            if p.prev and (p.indented or re.search(r"\\[ \t]+$", p.prev_text)):
+                report.append((name, p.line, "error", bad_continuation(p)))
+                stray.add((name, p.line))
+                continue
             if p.key in seen:
                 report.append((name, p.line, "error", f"duplicate key {p.key} (first on line {seen[p.key]})"))
             seen.setdefault(p.key, p.line)
@@ -176,8 +206,13 @@ def main():
             continue
         en = {p.key: p for p in parsed[en_name][0]}
         for p in parsed[name][0]:
+            if (name, p.line) in stray:
+                continue
             if p.key not in en:
-                report.append((name, p.line, "error", f"{p.key} is not in {en_name}"))
+                if is_fragment(p):
+                    report.append((name, p.line, "error", bad_continuation(p)))
+                else:
+                    report.append((name, p.line, "error", f"{p.key} is not in {en_name}"))
                 continue
             for level, msg in compare(lang, en[p.key], p):
                 report.append((name, p.line, level, f"{p.key}: {msg}"))
