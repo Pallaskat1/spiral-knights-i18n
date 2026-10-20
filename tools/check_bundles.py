@@ -13,6 +13,8 @@ Errors (exit status 1):
   - duplicate keys in one file
   - {0}-style placeholders, HTML tags or "|" separators that differ from the English
   - an escaped backslash before "n" (shows up in game as a literal "\\n")
+  - a value ending in a space or tab (the production build's resource check rejects it); write a
+    wanted trailing space as \\u0020
   - a chat command alias (c.* keys) used by more than one command in the same language
 
 Warnings:
@@ -38,8 +40,8 @@ SPANISH = re.compile(r"[ñ¿¡]|\b(?:y|el|los|las|del|una|usted|puedes|tienes|mu
 
 
 class Prop:
-    def __init__(self, key, raw, line):
-        self.key, self.raw, self.line = key, raw, line
+    def __init__(self, key, raw, line, last):
+        self.key, self.raw, self.line, self.last = key, raw, line, last
 
 
 def _is_ws(c):
@@ -99,7 +101,7 @@ def parse(path):
             v += 1
             while v < len(text) and _is_ws(text[v]):
                 v += 1
-        props.append(Prop(decode(text[:k]), text[v:], start + 1))
+        props.append(Prop(decode(text[:k]), text[v:], start + 1, i + 1))
         i += 1
     return props, problems
 
@@ -166,6 +168,8 @@ def main():
             if p.key in seen:
                 report.append((name, p.line, "error", f"duplicate key {p.key} (first on line {seen[p.key]})"))
             seen.setdefault(p.key, p.line)
+            if p.raw.endswith((" ", "\t")):
+                report.append((name, p.last, "error", f"{p.key}: trailing whitespace"))
     for name in names:
         m = LANG_SUFFIX.match(name)
         if not m:
