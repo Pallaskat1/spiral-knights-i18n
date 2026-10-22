@@ -1,4 +1,4 @@
-# spiral-knights-translations
+# spiral-knights-translations (Bahasa Indonesia)
 Internationalization bundles for Spiral Knights
 
 ## How it works
