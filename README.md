@@ -1,4 +1,4 @@
-# spiral-knights-translations
+# spiral-knights-i18n
 Internationalization bundles for Spiral Knights
 
 ## How it works
