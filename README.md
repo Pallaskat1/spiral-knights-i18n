@@ -22,6 +22,10 @@ separators that don't match the English. To check only one language, pass it wit
 e.g. `python3 tools/check_bundles.py --lang es`, and to check only one bundle, use `--bundle`,
 e.g. `--bundle pvp`. They can be combined: `--bundle pvp --lang es`.
 
+If you edit a bundle in an editor that saves accented letters as-is, run
+`python3 tools/fix_unicode.py pvp_es` (or a path to the file) to rewrite them as `\uXXXX`
+escapes. Add `--check` to only list the files that need it.
+
 ## License and contributions
 
 ### Ownership

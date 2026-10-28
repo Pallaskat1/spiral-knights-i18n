@@ -85,7 +85,8 @@ def parse(path):
         bad = sorted({c for c in text if ord(c) > 127})
         if bad:
             chars = ", ".join(f"'{c}' (\\u{ord(c):04x})" if c != "�" else "invalid UTF-8" for c in bad)
-            problems.append((n, "error", f"non-ASCII character {chars}; write it as a \\uXXXX escape"))
+            problems.append((n, "error", f"non-ASCII character {chars}; write it as a \\uXXXX escape "
+                                         "(tools/fix_unicode.py does this)"))
         if any(ord(c) < 32 and c not in "\t\f" or ord(c) == 127 for c in text):
             problems.append((n, "error", "control character; remove it or write it as an escape"))
         for m in MALFORMED_UNICODE.finditer(text):
